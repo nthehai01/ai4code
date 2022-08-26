@@ -1,9 +1,7 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Layer
 
-from attention import *
-
-class MultiHeadAttention(tf.keras.layers.layer):
+class MultiHeadAttention(Layer):
     def __init__(self, d_feature, num_heads = 6):
         """
         Args:
@@ -35,12 +33,12 @@ class MultiHeadAttention(tf.keras.layers.layer):
         d_head = self.d_feature // self.num_heads
         seqlen = x.shape[1]
 
-        x = tf.reshape(x, (-1, seqlen, self.num_heads, self.d_head))
+        x = tf.reshape(x, (-1, seqlen, self.num_heads, d_head))
 
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
 
-    def scaled_dot_product_Attention(q, k, v, mask=None):
+    def scaled_dot_product_attention(self, q, k, v, mask=None):
         """ 
         Scaled dot-product attention.
 
