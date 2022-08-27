@@ -9,7 +9,7 @@ class CellFeatureLayer(Layer):
             cell_pos (str): percentile rank of the cell
         """
         
-        super(CellFeature, self).__init__()
+        super(CellFeatureLayer, self).__init__()
         self.d_model = d_model
         self.ff = tf.keras.Sequential([
             Dense(64, activation='relu'),
