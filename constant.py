@@ -1,0 +1,9 @@
+MAX_LEN = 128
+BOS = '<start>'
+EOS = '<end>'
+UTF_8 = 'UTF-8'
+BUFFER_SIZE = 20000
+BATCH_SIZE = 64
+BERT_PATH = 'bert-base-cased'
+NUM_TRAIN = 10
+MAX_CELL = 50
