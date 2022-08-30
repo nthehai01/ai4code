@@ -4,25 +4,28 @@ import re
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+import numpy as np
 
 class Dataset:
     """
     Data preparator for the model.
     """
 
-    def __init__(self, data_dir, model_path, max_len, num_train, buffer_size, batch_size):
+    def __init__(self, data_dir, model_path, max_len, num_cells, num_train, buffer_size, batch_size):
         """
         Args:
             data_dir (str): Path to the data directory.
             model_path (str): Path of the pre-trained model.
             max_len (int): Maximum length of a sentence.
-            num_train (int): Number of notebook to be used for training.
+            num_cells (int): Maximum number of cells allowed for a notebook.
+            num_train (int): Number of notebook to be used for training, load all if -1.
             buffer_size (int): Buffer size for shuffling.
             batch_size (int): Batch size.
         """
         
         self.data_dir = Path(data_dir)
         self.max_len = max_len
+        self.num_cells = num_cells
         self.num_train = num_train
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.buffer_size = buffer_size
@@ -58,7 +61,10 @@ class Dataset:
             df (pd): Training dataset.
         """
 
-        paths_train = list((self.data_dir / 'train').glob('*.json'))[:self.num_train]
+        if self.num_train == -1:
+            paths_train = list((self.data_dir / 'train').glob('*.json'))
+        else:
+            paths_train = list((self.data_dir / 'train').glob('*.json'))[:self.num_train]
         notebooks_train = [
             self.read_notebook(path) for path in tqdm(paths_train, desc='Train NBs')
         ]
@@ -179,8 +185,8 @@ class Dataset:
 
         # Tokenize the source
         input_ids, attention_mask = self.tokenize(cell.source)
-        cell.input_ids = input_ids.numpy()[0]
-        cell.attention_mask = attention_mask.numpy()[0]
+        cell.input_ids = input_ids.numpy()[0].tolist()
+        cell.attention_mask = attention_mask.numpy()[0].tolist()
 
         # Get the cell features
         cell_features = [
@@ -225,6 +231,123 @@ class Dataset:
 
         return df
 
+
+    def filter_by_num_cells(self, df, max_cells, min_cells=0):
+        """
+        Filter the notebooks by the number of cells containing.
+
+        Args:
+            df (pd): Notebook dataframe.
+            max_cells (int): The upper bound on the number of cells to keep.
+            min_cells (int): The lower bound on the number of cells to keep.
+        Returns:
+            filtered_df (pd): The dataframe after being filtered.
+        """
+
+        cell_count = df.groupby("id").count()
+        cell_count = cell_count["cell_id"]
+        temp = cell_count[(cell_count >= min_cells) & (cell_count <= max_cells)]
+
+        filtered_df = df[df['id'].isin(temp.keys())]
+        return filtered_df
+
+
+    def get_notebook_token(self, df, pad):
+        """
+        Get the tokens for model. In this function, we'll pad the notebooks to be equal in term of number of cells that a notebook can maximum contains (i.e. This process is pretty much the same compared to the way we pad for a single sentence before). The returned cell_mask will tell us whether it's actually a real cell (real cell -> 1) or a padded version (fake cell -> 0).
+
+        Args:
+            df (pd): The tokenized notebook dataframe which contains the tokens instead of the rough content for each cell.
+            pad (int): pad value for the fake cell (padded cell).
+        Returns:
+            input_ids (np array): Input ids with shape (num_notebooks, num_cells, max_len)
+            attention_mask (np array): Attention mask with shape (num_notebooks, num_cells, max_len)
+            cell_features (np array): Cell features with shape (num_notebooks, num_cells, 2)
+            cell_mask (np array): Cell mask with shape (num_notebooks, num_cells, 1)
+            target (np array): Percentile rank with shape (num_notebooks, num_cells, 1)
+        """
+
+        def create_tensor(col, desired_shape):
+            """
+            Create the desired tensor.
+
+            Args:
+                col (str): Column name needed to be tensorized.
+                desired_shape (tuple): Desired output's shape.
+            Returns:
+                out (np array): Padded output with the shape of desired_shape.
+            """
+
+            out = np.full(shape=desired_shape, fill_value=pad)
+            
+            count = 0
+            for _, group in df.groupby("id"):
+                value = group[col].tolist()
+                value_shape = np.array(value).shape
+                
+                if len(value_shape) == 1:
+                    out[count, :value_shape[0], 0] = value
+                else:
+                    out[count, :value_shape[0], :value_shape[1]] = value
+
+                count += 1
+
+            return out
+
+        input_ids = create_tensor(
+            "input_ids", 
+            (self.num_train, self.num_cells, self.max_len)
+        )
+        attention_mask = create_tensor(
+            "attention_mask", 
+            (self.num_train, self.num_cells, self.max_len)
+        )
+        cell_features = create_tensor(
+            "cell_features", 
+            (self.num_train, self.num_cells, 2)
+        )
+
+        cell_mask = np.zeros((self.num_train, self.num_cells, 1))
+        count = 0
+        for _, group in df.groupby("id"):
+            value = group["input_ids"].tolist()
+            value_shape = np.array(value).shape
+            cell_mask[count, :value_shape[0], :] = 1
+            count += 1
+
+        target = create_tensor("pct_rank", (self.num_train, self.num_cells, 1))
+
+        return input_ids, attention_mask, cell_features, cell_mask, target
+
+
+    def save_token(self, token, file_path):
+        """
+        Save the token to the disk.
+
+        Args:
+            token (np array): The token needed to be saved.
+            file_path (str): Path to save the token.
+        """
+
+        with open(file_path, 'wb') as f:
+            np.save(f, token)
+        
+
+    def load_token(self, file_path):
+        """
+        Load the token from the disk.
+
+        Args:
+            file_path (str): Path to load the token.
+        Returns:
+            token (np array): The loaded token.
+        """
+
+        with open(file_path, 'rb') as f:
+            token = np.load(f)
+
+        return token
+        
 
     def build_dataset(self):
         """
