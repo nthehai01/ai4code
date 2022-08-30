@@ -9,7 +9,7 @@ class AttentionPooling(Layer):
     def __init__(self, d_ff):
         """
         Args:
-            d_ff (int): dimentionality of the feed forward layer
+            d_ff (int): Dimensionality of the feed forward layer
         """
         
         super(AttentionPooling, self).__init__()

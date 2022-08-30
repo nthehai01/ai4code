@@ -183,7 +183,10 @@ class Dataset:
         cell.attention_mask = attention_mask.numpy()[0]
 
         # Get the cell features
-        cell_features = [int(cell.cell_type == 'code'), cell.pct_rank]
+        cell_features = [
+            int(cell.cell_type == 'code'), 
+            cell.pct_rank if cell.cell_type == 'code' else 0
+        ]
         cell.cell_features = cell_features
 
         return cell
