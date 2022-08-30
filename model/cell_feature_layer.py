@@ -23,10 +23,14 @@ class CellFeatureLayer(Layer):
             cell_type (tensor): cell types with shape (..., num_cells, 1)
             cell_pos (tensor): percentile rank of the cells with shape (..., num_cells, 1)
         Returns:
-            out (tensor): cell feature embedding with shape (..., num_cells, d_model)
+            out (tensor): cell feature embedding with shape (..., num_cells, 1, d_model)
         """
         
+        batch_size = tf.shape(cell_type)[0]
+        num_cells = tf.shape(cell_type)[1]
+
         out = tf.concat([cell_type, cell_pos], axis=-1)
         out = self.ff(out)
+        out = tf.reshape(out, (batch_size, num_cells, 1, -1))
         return out
         

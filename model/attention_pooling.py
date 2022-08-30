@@ -25,9 +25,9 @@ class AttentionPooling(Layer):
         Perform attention pooling.
         
         Args:
-            x (tensor): input with shape (..., num_cells, max_len + 1, d_model)
+            x (tensor): Input with shape (..., num_cells, max_len + 1, d_model)
         Returns:
-            out (tensor): output with shape (..., num_cells, d_model)
+            out (tensor): Output with shape (..., num_cells, d_model)
         """
         
         attention = self.attention(x)

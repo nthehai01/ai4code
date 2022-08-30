@@ -7,12 +7,12 @@ class EncoderBlock(Layer):
     def __init__(self, d_model, n_heads, dropout, eps, d_ff, ff_activation):
         """
         Args:
-            d_model (int): dimentionality of the feature embedding
-            n_heads (int): the number of heads for the multi-head attention
-            dropout (float): dropout rate
-            eps (float): epsilon for layer normalization
-            d_ff (int): dimentionality of the feed forward layer
-            ff_activation (str): activation function of the feed forward layer
+            d_model (int): Dimensionality of the feature embedding.
+            n_heads (int): The number of heads for the multi-head attention.
+            dropout (float): Dropout rate.
+            eps (float): Epsilon for layer normalization.
+            d_ff (int): Dimensionality of the feed forward layer.
+            ff_activation (str): Activation function of the feed forward layer.
         """
         
         super(EncoderBlock, self).__init__()
