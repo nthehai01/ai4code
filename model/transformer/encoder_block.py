@@ -22,20 +22,8 @@ class EncoderBlock(Layer):
         self.norm2 = LayerNormalization(epsilon=eps)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
-        self.d_ff = d_ff
-        self.ff_activation = ff_activation
-
-
-    def feed_forward(self):
-        """
-        Perform a feed forward layer.
-        
-        Returns:
-            ff (model): feed forward layer
-        """
-        
-        return tf.keras.Sequential([
-            Dense(self.d_ff, activation=self.ff_activation),
+        self.feed_forward = tf.keras.Sequential([
+            Dense(d_ff, activation=ff_activation),
             Dense(self.d_model)
         ])
 
@@ -60,13 +48,12 @@ class EncoderBlock(Layer):
         x = x + mha_output
         x = self.norm1(x)
 
-        # TODO: FIX AND UNFREEZE THESE FOLLOWING LINES OF CODE
-        # # Feed forward
-        # ff_output = self.feed_forward()(x)
-        # ff_output = self.dropout2(ff_output, training=is_training)
+        # Feed forward
+        ff_output = self.feed_forward(x)
+        ff_output = self.dropout2(ff_output, training=is_training)
 
-        # # Add & Norm
-        # x = x + ff_output
-        # x = self.norm2(x)
+        # Add & Norm
+        x = x + ff_output
+        x = self.norm2(x)
 
         return x
