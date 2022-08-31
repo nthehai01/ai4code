@@ -3,14 +3,16 @@ from tensorflow.keras.layers import Layer
 from transformers import TFAutoModel
 
 class CellTransformer(Layer):
-    def __init__(self, model_path):
+    def __init__(self, model_path, d_model):
         """
         Args:
             model_path (str): Path of the pre-trained model.
+            d_model (int): Dimension of the model.
         """
         
         super(CellTransformer, self).__init__()
         self.bert = TFAutoModel.from_pretrained(model_path)
+        self.d_model = d_model
 
     
     def call(self, input_ids, attention_mask):
@@ -30,5 +32,5 @@ class CellTransformer(Layer):
         attention_mask = tf.reshape(attention_mask, (batch_size, -1))
 
         out = self.bert(input_ids=input_ids, attention_mask=attention_mask)[0]
-        out = tf.reshape(out, (batch_size, num_cells, max_len, -1))
+        out = tf.reshape(out, (batch_size, num_cells, max_len, self.d_model))
         return out

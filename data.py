@@ -11,7 +11,7 @@ class Dataset:
     Data preparator for the model.
     """
 
-    def __init__(self, data_dir, model_path, max_len, num_cells, num_train, buffer_size, batch_size):
+    def __init__(self, data_dir, model_path, max_len, num_cells, num_train, buffer_size, batch_size, cell_pad):
         """
         Args:
             data_dir (str): Path to the data directory.
@@ -21,6 +21,7 @@ class Dataset:
             num_train (int): Number of notebook to be used for training, load all if -1.
             buffer_size (int): Buffer size for shuffling.
             batch_size (int): Batch size.
+            cell_pad (int): Pad value for the fake cell (padded cell).
         """
         
         self.data_dir = Path(data_dir)
@@ -30,6 +31,7 @@ class Dataset:
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.buffer_size = buffer_size
         self.batch_size = batch_size
+        self.cell_pad = cell_pad
 
 
     def read_notebook(self, path):
@@ -252,13 +254,12 @@ class Dataset:
         return filtered_df
 
 
-    def get_notebook_token(self, df, pad):
+    def get_notebook_token(self, df):
         """
         Get the tokens for model. In this function, we'll pad the notebooks to be equal in term of number of cells that a notebook can maximum contains (i.e. This process is pretty much the same compared to the way we pad for a single sentence before). The returned cell_mask will tell us whether it's actually a real cell (real cell -> 1) or a padded version (fake cell -> 0).
 
         Args:
             df (pd): The tokenized notebook dataframe which contains the tokens instead of the rough content for each cell.
-            pad (int): pad value for the fake cell (padded cell).
         Returns:
             input_ids (np array): Input ids with shape (num_notebooks, num_cells, max_len)
             attention_mask (np array): Attention mask with shape (num_notebooks, num_cells, max_len)
@@ -278,7 +279,7 @@ class Dataset:
                 out (np array): Padded output with the shape of desired_shape.
             """
 
-            out = np.full(shape=desired_shape, fill_value=pad)
+            out = np.full(shape=desired_shape, fill_value=self.cell_pad)
             
             count = 0
             for _, group in df.groupby("id"):
@@ -349,29 +350,42 @@ class Dataset:
         return token
         
 
-    def build_dataset(self):
+    def build_dataset(self, tensor_path=None):
         """
         Build the dataset for training.
+
+        Args:
+            tensor_path (str): Path to the main directory for saving the encoded arrays.
         """
 
-        def map_func(input_ids, attention_mask, cell_features, pct_rank):
+        def map_func(input_ids, attention_mask, cell_features, cell_mask, target):
             return ( 
                 {
                     'input_ids': input_ids, 
                     'attention_mask': attention_mask, 
-                    'cell_features': cell_features
+                    'cell_features': cell_features,
+                    'cell_mask': cell_mask
                 }, 
-                pct_rank 
+                target 
             )
 
         df = self.load_dataset()
         df = self.preprocess_dataset(df)
 
+        input_ids, attention_mask, cell_features, cell_mask, target = self.get_notebook_token(df)
+        if tensor_path:
+            self.save_token(input_ids, tensor_path + "/input_ids.npy")
+            self.save_token(attention_mask, tensor_path + "/attention_mask.npy")
+            self.save_token(cell_features, tensor_path + "/cell_features.npy")
+            self.save_token(cell_mask, tensor_path + "/cell_mask.npy")
+            self.save_token(target, tensor_path + "/target.npy")
+
         dataset = tf.data.Dataset.from_tensor_slices((
-            df['input_ids'].tolist(), 
-            df['attention_mask'].tolist(), 
-            df['cell_features'].tolist(), 
-            df['pct_rank'].tolist()
+            input_ids, 
+            attention_mask, 
+            cell_features, 
+            cell_mask,
+            target
         ))
         dataset = dataset.map(map_func)
 
