@@ -66,4 +66,4 @@ loss = tf.keras.losses.MeanAbsoluteError()
 
 model.compile(optimizer=optimizer, loss=loss)
 
-history = model.fit(train, epochs=1)
+history = model.fit(train, epochs=EPOCHS)
