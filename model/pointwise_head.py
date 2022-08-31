@@ -21,7 +21,7 @@ class PointwiseHead(Layer):
             x (tensor): Input with shape (..., num_cells, d_model)
             is_training (bool): Whether the model is being trained.
         Returns:
-            out (tensor): Output with shape (..., num_cells, 1)
+            out (tensor): Output with shape (..., num_cells)
         """
 
         d_model = x.shape[-1]
@@ -32,6 +32,6 @@ class PointwiseHead(Layer):
         out = self.dropout(out, training=is_training)
         out = self.top(out)
 
-        out = tf.reshape(out, (-1, num_cells, 1))  # shape (..., num_cells, 1)
+        out = tf.reshape(out, (-1, num_cells))  # shape (..., num_cells)
 
         return out

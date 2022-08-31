@@ -1,10 +1,10 @@
-MAX_LEN = 10
-MAX_CELL = 10
-BOS = '<start>'
-EOS = '<end>'
-UTF_8 = 'UTF-8'
+MAX_LEN = 5
+MAX_CELL = 5
 BUFFER_SIZE = 1024
 BATCH_SIZE = 2
 MODEL_PATH = 'bert-base-cased'
 D_MODEL = 768
-NUM_TRAIN = 10
+NUM_TRAIN = 5
+DATA_DIR = "data"
+CELL_PAD = 0
+LEARNING_RATE = 0.01

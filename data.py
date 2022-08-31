@@ -317,6 +317,7 @@ class Dataset:
             count += 1
 
         target = create_tensor("pct_rank", (self.num_train, self.num_cells, 1))
+        target = tf.reshape(target, (self.num_train, self.num_cells))
 
         return input_ids, attention_mask, cell_features, cell_mask, target
 

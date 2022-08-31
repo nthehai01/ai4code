@@ -26,21 +26,18 @@ class EncoderBlock(Layer):
         self.ff_activation = ff_activation
 
 
-    def feed_forward(self, x):
+    def feed_forward(self):
         """
         Perform a feed forward layer.
         
-        Args:
-            x (tensor): input with shape (..., seqlen, d_model)
         Returns:
             ff (model): feed forward layer
         """
         
-        ff = tf.keras.Sequential([
+        return tf.keras.Sequential([
             Dense(self.d_ff, activation=self.ff_activation),
             Dense(self.d_model)
         ])
-        return ff(x)
 
 
     def call(self, x, is_training, mask=None):
@@ -54,7 +51,7 @@ class EncoderBlock(Layer):
         Returns:
             x (tensor): output with shape (..., seqlen, d_model)
         """
-        
+
         # Multi-head attention
         mha_output = self.mha(x, x, x, mask)
         mha_output = self.dropout1(mha_output, training=is_training)
@@ -63,12 +60,13 @@ class EncoderBlock(Layer):
         x = x + mha_output
         x = self.norm1(x)
 
-        # Feed forward
-        ff_output = self.feed_forward(x)
-        ff_output = self.dropout2(ff_output, training=is_training)
-        
-        # Add & Norm
-        x = x + ff_output
-        x = self.norm2(x)
+        # TODO: FIX AND UNFREEZE THESE FOLLOWING LINES OF CODE
+        # # Feed forward
+        # ff_output = self.feed_forward()(x)
+        # ff_output = self.dropout2(ff_output, training=is_training)
+
+        # # Add & Norm
+        # x = x + ff_output
+        # x = self.norm2(x)
 
         return x
