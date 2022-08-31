@@ -229,7 +229,7 @@ class Dataset:
         df['cell_features'] = 0
         df = df.apply(self.preprocess_content, axis=1)
 
-        df = df.drop(['cell_id', 'cell_type', 'source', 'rank'], axis=1)
+        df = df.drop(['cell_type', 'source', 'rank'], axis=1)
 
         return df
 
@@ -371,6 +371,8 @@ class Dataset:
 
         df = self.load_dataset()
         df = self.preprocess_dataset(df)
+
+        df = self.filter_by_num_cells(df, self.num_cells)
 
         input_ids, attention_mask, cell_features, cell_mask, target = self.get_notebook_token(df)
         if tensor_path:
