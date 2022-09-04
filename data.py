@@ -268,18 +268,19 @@ class Dataset:
             target (np array): Percentile rank with shape (num_notebooks, num_cells, 1)
         """
 
-        def create_tensor(col, desired_shape):
+        def create_tensor(col, desired_shape, dtype="int32"):
             """
             Create the desired tensor.
 
             Args:
                 col (str): Column name needed to be tensorized.
                 desired_shape (tuple): Desired output's shape.
+                dtype (str): Data type. Default is int32.
             Returns:
                 out (np array): Padded output with the shape of desired_shape.
             """
 
-            out = np.full(shape=desired_shape, fill_value=self.cell_pad)
+            out = np.full(shape=desired_shape, fill_value=self.cell_pad, dtype=dtype)
             
             count = 0
             for _, group in df.groupby("id"):
@@ -287,7 +288,7 @@ class Dataset:
                 value_shape = np.array(value).shape
                 
                 if len(value_shape) == 1:
-                    out[count, :value_shape[0], 0] = value
+                    out[count, :value_shape[0]] = value
                 else:
                     out[count, :value_shape[0], :value_shape[1]] = value
 
@@ -295,19 +296,25 @@ class Dataset:
 
             return out
 
+        # input_ids
         input_ids = create_tensor(
             "input_ids", 
             (self.num_train, self.num_cells, self.max_len)
         )
+
+        # attention_mask
         attention_mask = create_tensor(
             "attention_mask", 
             (self.num_train, self.num_cells, self.max_len)
         )
+
+        # cell_features
         cell_features = create_tensor(
             "cell_features", 
             (self.num_train, self.num_cells, 2)
         )
 
+        # cell_mask
         cell_mask = np.zeros((self.num_train, self.num_cells, 1))
         count = 0
         for _, group in df.groupby("id"):
@@ -316,8 +323,8 @@ class Dataset:
             cell_mask[count, :value_shape[0], :] = 1
             count += 1
 
-        target = create_tensor("pct_rank", (self.num_train, self.num_cells, 1))
-        target = tf.reshape(target, (self.num_train, self.num_cells))
+        # target
+        target = create_tensor("pct_rank", (self.num_train, self.num_cells), dtype="float32")
 
         return input_ids, attention_mask, cell_features, cell_mask, target
 
