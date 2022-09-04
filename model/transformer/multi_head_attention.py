@@ -31,7 +31,7 @@ class MultiHeadAttention(Layer):
         """
 
         d_head = self.d_model // self.num_heads
-        seqlen = x.shape[1]
+        seqlen = tf.shape(x)[1]
 
         x = tf.reshape(x, (-1, seqlen, self.num_heads, d_head))
 
@@ -54,7 +54,7 @@ class MultiHeadAttention(Layer):
         assert q.shape[-1] == k.shape[-1] == v.shape[-1], "Embedding dimensions of q, k, v aren't all the same"
         assert k.shape[-2] == v.shape[-2], "Key and value lengths aren't the same"
 
-        depth = q.shape[-1]
+        depth = tf.shape(q)[-1]
         depth = tf.cast(depth, tf.float32)
 
         attention_scores = tf.matmul(q, k, transpose_b=True) / tf.math.sqrt(depth)  # shape (..., q_length, k_length)
@@ -81,7 +81,7 @@ class MultiHeadAttention(Layer):
             attention_matrix (tensor): self attention with shape (..., q_length, k_length)
         """
 
-        q_length = q.shape[1]
+        q_length = tf.shape(q)[1]
 
         q = self.q_linear(q)
         k = self.k_linear(k)

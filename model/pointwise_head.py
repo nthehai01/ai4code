@@ -24,9 +24,8 @@ class PointwiseHead(Layer):
             out (tensor): Output with shape (..., num_cells)
         """
 
-        d_model = x.shape[-1]
-        num_cells = x.shape[-2]
-        x = tf.reshape(x, (-1, d_model))  # shape (..., d_model)
+        d_model = tf.shape(x)[-1]
+        num_cells = tf.shape(x)[-2]
 
         out = self.ff(x)
         out = self.dropout(out, training=is_training)
