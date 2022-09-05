@@ -311,7 +311,8 @@ class Dataset:
         # cell_features
         cell_features = create_tensor(
             "cell_features", 
-            (self.num_train, self.num_cells, 2)
+            (self.num_train, self.num_cells, 2),
+            dtype="float32"
         )
 
         # cell_mask
