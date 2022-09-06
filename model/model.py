@@ -33,15 +33,16 @@ class Model(tf.keras.Model):
         self.pointwise_head = PointwiseHead(d_ff_pointwise, dropout_pointwise)
 
 
-    def call(self, input_ids, attention_mask, cell_features, is_training=False):
+    def call(self, input_ids, attention_mask, cell_features, cell_mask, is_training=False):
         """
         Args:
             input_ids (tensor): List of the input IDs of the tokens with shape (..., num_cells, max_len)
             attention_mask (tensor): List of the attention masks of the tokens with shape (..., num_cells, max_len)
             cell_features (tensor): Cell features with shape (..., num_cells, 2)
+            cell_mask (tensor): Cell mask with shape (..., num_cells)
             is_training (bool): Whether the model is being trained. Default: False.
         Returns:
-            out (tensor): Output with shape (..., num_cells, 1)
+            out (tensor): Output with shape (..., num_cells)
         """
         
         embeddings = self.cell_transformer(input_ids, attention_mask)  # shape (..., num_cells, max_len, d_model)
@@ -53,5 +54,6 @@ class Model(tf.keras.Model):
 
         out = self.notebook_transformer(out, is_training)  # shape (..., num_cells, d_model)
 
-        out = self.pointwise_head(out, is_training)  # shape (..., num_cells, 1)
+        out = self.pointwise_head(out, cell_mask, is_training)  # shape (..., num_cells)
+
         return out

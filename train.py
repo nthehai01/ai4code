@@ -49,8 +49,8 @@ stacked_transformer = Model(
 
 # Define the model
 model = tf.keras.Model(
-    inputs=[input_ids, attention_mask, cell_features], 
-    outputs=stacked_transformer.call(input_ids, attention_mask, cell_features, True)
+    inputs=[input_ids, attention_mask, cell_features, cell_mask], 
+    outputs=stacked_transformer.call(input_ids, attention_mask, cell_features, cell_mask, True)
 )
 
 # Model summary

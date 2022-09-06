@@ -15,16 +15,16 @@ class PointwiseHead(Layer):
         self.top = Dense(1, activation='sigmoid')
 
 
-    def call(self, x, is_training):
+    def call(self, x, cell_mask, is_training):
         """
         Args:
             x (tensor): Input with shape (..., num_cells, d_model)
+            cell_mask (tensor): Cell mask with shape (..., num_cells)
             is_training (bool): Whether the model is being trained.
         Returns:
             out (tensor): Output with shape (..., num_cells)
         """
 
-        d_model = tf.shape(x)[-1]
         num_cells = tf.shape(x)[-2]
 
         out = self.ff(x)
@@ -32,5 +32,8 @@ class PointwiseHead(Layer):
         out = self.top(out)
 
         out = tf.reshape(out, (-1, num_cells))  # shape (..., num_cells)
+
+        cell_mask = tf.cast(cell_mask, tf.float32)
+        out = tf.math.multiply(out, cell_mask)  # shape (..., num_cells)
 
         return out
