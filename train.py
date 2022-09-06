@@ -30,7 +30,7 @@ train = d.build_dataset()
 input_ids = tf.keras.layers.Input(shape=(MAX_CELL, MAX_LEN), name='input_ids', dtype='int32')
 attention_mask = tf.keras.layers.Input(shape=(MAX_CELL, MAX_LEN), name='attention_mask', dtype='int32')
 cell_features = tf.keras.layers.Input(shape=(MAX_CELL, 2), name='cell_features', dtype='float32')
-cell_mask = tf.keras.layers.Input(shape=(MAX_CELL, 1), name='cell_mask', dtype='int32')
+cell_mask = tf.keras.layers.Input(shape=(MAX_CELL), name='cell_mask', dtype='int32')
 
 # Model initialization
 stacked_transformer = Model(
@@ -52,6 +52,9 @@ model = tf.keras.Model(
     inputs=[input_ids, attention_mask, cell_features, cell_mask], 
     outputs=stacked_transformer.call(input_ids, attention_mask, cell_features, cell_mask, True)
 )
+
+# Freeze the pre-trained (BERT) model 
+model.layers[3].trainable = False
 
 # Model summary
 model.summary()
