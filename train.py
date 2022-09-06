@@ -30,7 +30,7 @@ train = d.build_dataset()
 input_ids = tf.keras.layers.Input(shape=(MAX_CELL, MAX_LEN), name='input_ids', dtype='int32')
 attention_mask = tf.keras.layers.Input(shape=(MAX_CELL, MAX_LEN), name='attention_mask', dtype='int32')
 cell_features = tf.keras.layers.Input(shape=(MAX_CELL, 2), name='cell_features', dtype='float32')
-cell_mask = tf.keras.layers.Input(shape=(MAX_CELL), name='cell_mask', dtype='int32')
+cell_mask = tf.keras.layers.Input(shape=(MAX_CELL), name='cell_mask', dtype='float32')
 
 # Model initialization
 stacked_transformer = Model(

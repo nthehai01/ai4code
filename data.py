@@ -316,12 +316,12 @@ class Dataset:
         )
 
         # cell_mask
-        cell_mask = np.zeros((self.num_train, self.num_cells, 1))
+        cell_mask = np.zeros((self.num_train, self.num_cells, 1), dtype="float32")
         count = 0
         for _, group in df.groupby("id"):
             value = group["input_ids"].tolist()
             value_shape = np.array(value).shape
-            cell_mask[count, :value_shape[0], :] = 1
+            cell_mask[count, :value_shape[0], :] = 1.
             count += 1
 
         # target

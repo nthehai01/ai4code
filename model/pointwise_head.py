@@ -33,7 +33,6 @@ class PointwiseHead(Layer):
 
         out = tf.reshape(out, (-1, num_cells))  # shape (..., num_cells)
 
-        cell_mask = tf.cast(cell_mask, tf.float32)
         out = tf.math.multiply(out, cell_mask)  # shape (..., num_cells)
 
         return out
