@@ -2,6 +2,7 @@ import tensorflow as tf
 
 from model.cell_transformer import CellTransformer
 from model.cell_feature_layer import CellFeatureLayer
+from model.cell_norm import CellNorm
 from model.attention_pooling import AttentionPooling
 from model.notebook_transformer import NotebookTransformer
 from model.pointwise_head import PointwiseHead
@@ -28,6 +29,7 @@ class Model(tf.keras.Model):
         super(Model, self).__init__()
         self.cell_transformer = CellTransformer(model_path, d_model)
         self.cell_feature_layer = CellFeatureLayer(d_model)
+        self.cell_norm = CellNorm()
         self.attention_pooling = AttentionPooling(d_ff_pool)
         self.notebook_transformer = NotebookTransformer(d_model, n_heads, dropout_trans, eps, d_ff_trans, ff_activation, n_layers)
         self.pointwise_head = PointwiseHead(d_ff_pointwise, dropout_pointwise)
@@ -49,6 +51,8 @@ class Model(tf.keras.Model):
         features = self.cell_feature_layer(cell_features)  # shape (..., num_cells, 1, d_model)
 
         out = tf.concat([embeddings, features], axis=-2)  # shape (..., num_cells, max_len + 1, d_model)
+
+        out = self.cell_norm(out)  # shape (..., num_cells, max_len + 1, d_model)
         
         out = self.attention_pooling(out)  # shape (..., num_cells, d_model)
 
