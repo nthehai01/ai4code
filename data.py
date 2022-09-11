@@ -65,6 +65,7 @@ class Dataset:
 
         if self.num_train == -1:
             paths_train = list((self.data_dir / 'train').glob('*.json'))
+            self.num_train = len(paths_train)
         else:
             paths_train = list((self.data_dir / 'train').glob('*.json'))[:self.num_train]
         notebooks_train = [
@@ -127,6 +128,22 @@ class Dataset:
         # Sort the dataframe by the ranking
         df = df.sort_values(by=['id', 'rank']).reset_index(drop=True)
 
+        return df
+
+
+    def add_ancestors(self, df):
+        """
+        Add the ranking of each cell within a notebook.
+
+        Args:
+            df (pd): Dataset.
+        Returns:
+            df (pd): Dataset with ancestor info.
+        """
+
+        df_ancestors = pd.read_csv(self.data_dir / 'train_ancestors.csv', index_col='id')
+        
+        df = df.reset_index(drop=True).merge(df_ancestors, on=["id"])
         return df
 
 
@@ -210,6 +227,7 @@ class Dataset:
 
         df = self.read_notebooks()
         df = self.add_ranking(df)
+        df = self.add_ancestors(df)
 
         return df
 
@@ -359,11 +377,12 @@ class Dataset:
         return token
         
 
-    def build_dataset(self, tensor_path=None):
+    def build_dataset(self, df=None, tensor_path=None):
         """
         Build the dataset for training.
 
         Args:
+            df (pd): Notebook dataframe. If provided, the dataset will be using. Otherwise, the dataset will be loaded from the disk.
             tensor_path (str): Path to the main directory for saving the encoded arrays.
         """
 
@@ -378,9 +397,12 @@ class Dataset:
                 target 
             )
 
-        df = self.load_dataset()
+        
+        if df is None:
+            df = self.load_dataset()
+            
+        self.num_train = len(df)
         df = self.preprocess_dataset(df)
-
         df = self.filter_by_num_cells(df, self.num_cells)
 
         input_ids, attention_mask, cell_features, cell_mask, target = self.get_notebook_token(df)
