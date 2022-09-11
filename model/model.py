@@ -30,7 +30,7 @@ class Model(tf.keras.Model):
         self.cell_transformer = CellTransformer(model_path, d_model)
         self.cell_feature_layer = CellFeatureLayer(d_model)
         # self.cell_norm = CellNorm()
-        self.attention_pooling = AttentionPooling(d_ff_pool)
+        self.attention_pooling = AttentionPooling(d_ff_pool, d_model)
         self.notebook_transformer = NotebookTransformer(d_model, n_heads, dropout_trans, eps, d_ff_trans, ff_activation, n_layers)
         self.pointwise_head = PointwiseHead(d_ff_pointwise, dropout_pointwise)
 
