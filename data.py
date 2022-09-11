@@ -401,7 +401,7 @@ class Dataset:
         if df is None:
             df = self.load_dataset()
             
-        self.num_train = len(df)
+        self.num_train = len(df.groupby("id").count())
         df = self.preprocess_dataset(df)
         df = self.filter_by_num_cells(df, self.num_cells)
 
