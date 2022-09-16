@@ -11,7 +11,7 @@ class Dataset:
     Data preparator for the model.
     """
 
-    def __init__(self, data_dir, model_path, max_len, num_cells, num_train, buffer_size, batch_size, cell_pad):
+    def __init__(self, data_dir=None, model_path=None, max_len=None, num_cells=None, num_train=None, buffer_size=None, batch_size=None, cell_pad=None):
         """
         Args:
             data_dir (str): Path to the data directory.
@@ -24,11 +24,13 @@ class Dataset:
             cell_pad (int): Pad value for the fake cell (padded cell).
         """
         
-        self.data_dir = Path(data_dir)
+        if data_dir:
+            self.data_dir = Path(data_dir)
         self.max_len = max_len
         self.num_cells = num_cells
         self.num_train = num_train
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        if model_path:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.cell_pad = cell_pad
@@ -89,7 +91,7 @@ class Dataset:
         Args:
             df (pd): Dataset.
         Returns:
-            df (pd): Dataset with ranking in the ascending order of each notebook.
+            dummy_df (pd): Dataset with ranking in the ascending order of each notebook.
         """
 
         def get_ranks(base, derived):
@@ -106,7 +108,7 @@ class Dataset:
             df.reset_index('cell_id').groupby('id')['cell_id'].apply(list),
             how='right',
         )
-
+        
         ranks = {}
         for id_, cell_order, cell_id in df_orders_.itertuples():
             ranks[id_] = {'cell_id': cell_id, 'rank': get_ranks(cell_order, cell_id)}
@@ -118,17 +120,35 @@ class Dataset:
             .apply(pd.Series.explode)
             .set_index('cell_id', append=True)
         )
+
+        dummy_df = df.copy()
         
         # Merge Ranking to the main dataframe
-        df = df.reset_index().merge(df_ranks, on=["id", "cell_id"])
+        dummy_df = dummy_df.reset_index().merge(df_ranks, on=["id", "cell_id"])
 
         # Add percentile rank
-        df["pct_rank"] = df["rank"] / df.groupby("id")["cell_id"].transform("count")
+        dummy_df["pct_rank"] = dummy_df["rank"] / dummy_df.groupby("id")["cell_id"].transform("count")
 
-        # Sort the dataframe by the ranking
-        df = df.sort_values(by=['id', 'rank']).reset_index(drop=True)
+        return dummy_df
 
-        return df
+
+    def add_pseudo_pct_ranking(self, df):
+        """
+        For each notebook id, this function will group the cells by cell_type and get the pseudo_ranking for each cell within a cell_type. Then the pseudo_pct_ranking will be calculated by dividing these pseudo_ranking by total number of cells for each cell_type.
+
+        Args:
+            df (pd): Dataset.
+        Returns:
+            dummy_df (pd): Dataset with ranking in the ascending order of each notebook.
+        """
+        
+        dummy_df = df.copy()
+
+        dummy_df["pseudo_ranking"] = dummy_df.groupby(["id", "cell_type"]).cumcount()
+        dummy_df["pseudo_pct_ranking"] = dummy_df["pseudo_ranking"] / dummy_df.groupby(["id", "cell_type"])["cell_id"].transform("count")
+
+        dummy_df.drop(["pseudo_ranking"], axis=1, inplace=True)
+        return dummy_df
 
 
     def add_ancestors(self, df):
@@ -138,13 +158,15 @@ class Dataset:
         Args:
             df (pd): Dataset.
         Returns:
-            df (pd): Dataset with ancestor info.
+            dummy_df (pd): Dataset with ancestor info.
         """
-
+        
         df_ancestors = pd.read_csv(self.data_dir / 'train_ancestors.csv', index_col='id')
         
-        df = df.reset_index(drop=True).merge(df_ancestors, on=["id"])
-        return df
+        dummy_df = df.copy()
+        dummy_df = dummy_df.reset_index(drop=True).merge(df_ancestors, on=["id"])
+
+        return dummy_df
 
 
     def tokenize(self, sentence):
@@ -209,8 +231,8 @@ class Dataset:
 
         # Get the cell features
         cell_features = [
-            int(cell.cell_type == 'code'), 
-            cell.pct_rank if cell.cell_type == 'code' else 0
+            float(cell.cell_type == 'code'), 
+            cell.pseudo_pct_ranking if cell.cell_type == 'code' else 0.
         ]
         cell.cell_features = cell_features
 
@@ -228,6 +250,7 @@ class Dataset:
         df = self.read_notebooks()
         df = self.add_ranking(df)
         df = self.add_ancestors(df)
+        df = self.add_pseudo_pct_ranking(df)
 
         return df
 
@@ -247,9 +270,66 @@ class Dataset:
         df['cell_features'] = 0
         df = df.apply(self.preprocess_content, axis=1)
 
-        df = df.drop(['cell_type', 'source', 'rank'], axis=1)
+        df = df.drop(['source', 'rank', 'ancestor_id', 'pseudo_pct_ranking'], axis=1)
 
         return df
+
+
+    def truncate_cell(self, df, max_cell):
+        """
+        Truncate the cells for each notebook and make sure that the number of cells for each notebook does not exceed the max_cell. While truncating, this function prioritizes keeping the markdown cells.
+
+        Args:
+            df (pd): Notebook dataframe.
+            max_cell (int): The maximum number of cells for a notebook to be kept.
+        Returns:
+            df (pd): The dataframe after being truncated.
+        """
+
+        def get_cell(df, df_len, num_accepted):
+            """
+            Get the cell for each notebook.
+
+            Args:
+                df (pd): Notebook dataframe.
+                df_len (int): The length of the dataframe.
+                num_accepted (int): The number of accepted cells.
+            Returns:
+                cells (list): The list of tuples (notebook ids, cell ids) for accepted cell.
+            """
+
+            temp = df.head(num_accepted)
+            cells = list(zip(temp.id, temp.cell_id))
+            return cells
+
+
+        accepted = []
+
+        grouped = df.groupby(["id", "cell_type"])
+        group_keys = list(grouped.groups.keys())
+        num_groups = len(group_keys)
+
+        for i in range(0, num_groups - 1, 2):
+            group_id = group_keys[i][0]
+            code = grouped.get_group((group_id, 'code'))
+            md = grouped.get_group((group_id, 'markdown'))
+            
+            code_len = len(code)
+            md_len = len(md)
+
+            num_accepted_code = max_cell - md_len
+
+            if num_accepted_code > 0:
+                accepted.extend(get_cell(code, code_len, num_accepted_code))
+                accepted.extend(get_cell(md, md_len, md_len))
+            else:
+                accepted.extend(get_cell(md, md_len, max_cell))
+
+        accepted_df = df[df.apply(lambda x: (x.id, x.cell_id) in accepted, axis=1)]
+        accepted_df.reset_index(drop=True, inplace=True)
+        accepted_df = accepted_df.drop(columns=["cell_id", "cell_type"])
+
+        return accepted_df
 
 
     def filter_by_num_cells(self, df, max_cells, min_cells=0):
@@ -334,56 +414,30 @@ class Dataset:
         )
 
         # cell_mask
-        cell_mask = np.zeros((self.num_train, self.num_cells, 1), dtype="float32")
+        cell_mask = np.zeros((self.num_train, self.num_cells), dtype="float32")
         count = 0
         for _, group in df.groupby("id"):
             value = group["input_ids"].tolist()
             value_shape = np.array(value).shape
-            cell_mask[count, :value_shape[0], :] = 1.
+            cell_mask[count, :value_shape[0]] = 1.
             count += 1
 
         # target
-        target = create_tensor("pct_rank", (self.num_train, self.num_cells), dtype="float32")
+        target = create_tensor(
+            "pct_rank", 
+            (self.num_train, self.num_cells), 
+            dtype="float32"
+        )
 
         return input_ids, attention_mask, cell_features, cell_mask, target
 
 
-    def save_token(self, token, file_path):
-        """
-        Save the token to the disk.
-
-        Args:
-            token (np array): The token needed to be saved.
-            file_path (str): Path to save the token.
-        """
-
-        with open(file_path, 'wb') as f:
-            np.save(f, token)
-        
-
-    def load_token(self, file_path):
-        """
-        Load the token from the disk.
-
-        Args:
-            file_path (str): Path to load the token.
-        Returns:
-            token (np array): The loaded token.
-        """
-
-        with open(file_path, 'rb') as f:
-            token = np.load(f)
-
-        return token
-        
-
-    def build_dataset(self, df=None, tensor_path=None):
+    def build_dataset(self, df=None):
         """
         Build the dataset for training.
 
         Args:
             df (pd): Notebook dataframe. If provided, the dataset will be using. Otherwise, the dataset will be loaded from the disk.
-            tensor_path (str): Path to the main directory for saving the encoded arrays.
         """
 
         def map_func(input_ids, attention_mask, cell_features, cell_mask, target):
@@ -402,16 +456,11 @@ class Dataset:
             df = self.load_dataset()
             
         self.num_train = len(df.groupby("id").count())
-        df = self.preprocess_dataset(df)
-        df = self.filter_by_num_cells(df, self.num_cells)
 
+        df = self.preprocess_dataset(df)
+        df = self.truncate_cell(df, self.num_cells)
+        
         input_ids, attention_mask, cell_features, cell_mask, target = self.get_notebook_token(df)
-        if tensor_path:
-            self.save_token(input_ids, tensor_path + "/input_ids.npy")
-            self.save_token(attention_mask, tensor_path + "/attention_mask.npy")
-            self.save_token(cell_features, tensor_path + "/cell_features.npy")
-            self.save_token(cell_mask, tensor_path + "/cell_mask.npy")
-            self.save_token(target, tensor_path + "/target.npy")
 
         dataset = tf.data.Dataset.from_tensor_slices((
             input_ids, 
