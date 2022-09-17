@@ -270,7 +270,7 @@ class Dataset:
         df['cell_features'] = 0
         df = df.apply(self.preprocess_content, axis=1)
 
-        df = df.drop(['source', 'rank', 'ancestor_id', 'pseudo_pct_ranking'], axis=1)
+        df = df.drop(['source', 'rank', 'ancestor_id'], axis=1)
 
         return df
 
@@ -286,50 +286,34 @@ class Dataset:
             df (pd): The dataframe after being truncated.
         """
 
-        def get_cell(df, df_len, num_accepted):
-            """
-            Get the cell for each notebook.
+        def get_cell(df_id, max_cell):
+            code = df_id[df_id.cell_type == "code"]
+            md = df_id[df_id.cell_type == "markdown"]
 
-            Args:
-                df (pd): Notebook dataframe.
-                df_len (int): The length of the dataframe.
-                num_accepted (int): The number of accepted cells.
-            Returns:
-                cells (list): The list of tuples (notebook ids, cell ids) for accepted cell.
-            """
-
-            temp = df.head(num_accepted)
-            cells = list(zip(temp.id, temp.cell_id))
-            return cells
-
-
-        accepted = []
-
-        grouped = df.groupby(["id", "cell_type"])
-        group_keys = list(grouped.groups.keys())
-        num_groups = len(group_keys)
-
-        for i in range(0, num_groups - 1, 2):
-            group_id = group_keys[i][0]
-            code = grouped.get_group((group_id, 'code'))
-            md = grouped.get_group((group_id, 'markdown'))
-            
             code_len = len(code)
             md_len = len(md)
 
-            num_accepted_code = max_cell - md_len
+            num_accepted_md = min(max_cell, md_len)
+            num_accepted_code = min(max_cell - num_accepted_md, code_len)
 
-            if num_accepted_code > 0:
-                accepted.extend(get_cell(code, code_len, num_accepted_code))
-                accepted.extend(get_cell(md, md_len, md_len))
-            else:
-                accepted.extend(get_cell(md, md_len, max_cell))
+            assert num_accepted_code <= code_len
+            assert num_accepted_md <= md_len
+            assert (num_accepted_code + num_accepted_md) <= max_cell
+            if (code_len + md_len) < max_cell:
+                assert (num_accepted_code + num_accepted_md) == (code_len + md_len) 
 
-        accepted_df = df[df.apply(lambda x: (x.id, x.cell_id) in accepted, axis=1)]
-        accepted_df.reset_index(drop=True, inplace=True)
-        accepted_df = accepted_df.drop(columns=["cell_id", "cell_type"])
+            accepted_code = code.sample(n=num_accepted_code, replace=False, random_state=42)
+            accepted_code = accepted_code.sort_values(by=['pseudo_pct_ranking'], axis=0)
 
-        return accepted_df
+            accepted_md = md.sample(n=num_accepted_md, replace=False, random_state=42)
+            accepted_md = accepted_md.sort_values(by=['pseudo_pct_ranking'], axis=0)
+
+            return accepted_code.append(accepted_md, ignore_index=True)
+
+
+        grouped = df.groupby(["id"])
+        truncated_df = grouped.apply(lambda x: get_cell(x, max_cell)).reset_index(drop=True)
+        return truncated_df
 
 
     def filter_by_num_cells(self, df, max_cells, min_cells=0):
@@ -393,7 +377,7 @@ class Dataset:
                 count += 1
 
             return out
-
+        
         # input_ids
         input_ids = create_tensor(
             "input_ids", 
@@ -430,6 +414,25 @@ class Dataset:
         )
 
         return input_ids, attention_mask, cell_features, cell_mask, target
+    
+    
+    def filter_by_num_cells(self, df, max_cells, min_cells=0):
+        """
+        Filter the notebooks by the number of cells containing.
+        Args:
+            df (pd): Notebook dataframe.
+            max_cells (int): The upper bound on the number of cells to keep.
+            min_cells (int): The lower bound on the number of cells to keep.
+        Returns:
+            filtered_df (pd): The dataframe after being filtered.
+        """
+
+        cell_count = df.groupby("id").count()
+        cell_count = cell_count["cell_id"]
+        temp = cell_count[(cell_count >= min_cells) & (cell_count <= max_cells)]
+
+        filtered_df = df[df['id'].isin(temp.keys())]
+        return filtered_df
 
 
     def build_dataset(self, df=None):
@@ -438,6 +441,9 @@ class Dataset:
 
         Args:
             df (pd): Notebook dataframe. If provided, the dataset will be using. Otherwise, the dataset will be loaded from the disk.
+        Returns:
+            df (pd): Processed dataframe for reconstruction purpose. This dataset has only the notebook ids and cell ids columns.
+            batched_set: Batched dataset for training.
         """
 
         def map_func(input_ids, attention_mask, cell_features, cell_mask, target):
@@ -454,11 +460,12 @@ class Dataset:
         
         if df is None:
             df = self.load_dataset()
-            
-        self.num_train = len(df.groupby("id").count())
 
         df = self.preprocess_dataset(df)
         df = self.truncate_cell(df, self.num_cells)
+#         df = self.filter_by_num_cells(df, max_cells=self.num_cells)
+    
+        self.num_train = len(df.groupby("id").count())
         
         input_ids, attention_mask, cell_features, cell_mask, target = self.get_notebook_token(df)
 
@@ -470,5 +477,6 @@ class Dataset:
             target
         ))
         dataset = dataset.map(map_func)
+        batched_set = dataset.shuffle(self.buffer_size).batch(self.batch_size)
 
-        return dataset.shuffle(self.buffer_size).batch(self.batch_size)
+        return df[["id", "cell_id"]], batched_set
