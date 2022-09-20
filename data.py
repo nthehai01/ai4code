@@ -435,7 +435,7 @@ class Dataset:
         return filtered_df
 
 
-    def build_dataset(self, df=None):
+    def build_dataset(self, df=None, exceed_cells_action="filter"):
         """
         Build the dataset for training.
 
@@ -444,6 +444,7 @@ class Dataset:
         Returns:
             df (pd): Processed dataframe for reconstruction purpose. This dataset has only the notebook ids and cell ids columns.
             batched_set: Batched dataset for training.
+            exceed_cells_action (str): The action to take when the number of cells in a notebook exceeds the maximum number of cells. There are two options: "filter" and "truncate": (1) "filter" (Default action) will filter out the notebooks that exceed the maximum number of cells, (2) "truncate" will truncate the some cells to ensure the notebooks do not have more than accepted number of cells.
         """
 
         def map_func(input_ids, attention_mask, cell_features, cell_mask, target):
@@ -462,8 +463,11 @@ class Dataset:
             df = self.load_dataset()
 
         df = self.preprocess_dataset(df)
-        df = self.truncate_cell(df, self.num_cells)
-#         df = self.filter_by_num_cells(df, max_cells=self.num_cells)
+
+        if exceed_cells_action == "truncate":
+            df = self.truncate_cell(df, self.num_cells)
+        if exceed_cells_action == "filter":
+            df = self.filter_by_num_cells(df, max_cells=self.num_cells)
     
         self.num_train = len(df.groupby("id").count())
         
@@ -480,3 +484,4 @@ class Dataset:
         batched_set = dataset.shuffle(self.buffer_size).batch(self.batch_size)
 
         return df[["id", "cell_id"]], batched_set
+        
