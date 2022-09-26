@@ -18,7 +18,7 @@ class CellNorm(Layer):
         num_cells = tf.shape(x)[1]
         max_len = tf.shape(x)[2]
 
-        x = tf.reshape(x, (-1, max_len, self.d_model))
+        x = tf.reshape(x, shape=(-1, max_len, self.d_model))
         x = self.batch_norm(x)
-        x = tf.reshape(x, (-1, num_cells, max_len, self.d_model))
+        x = tf.reshape(x, shape=(-1, num_cells, max_len, self.d_model))
         return x 

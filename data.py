@@ -203,6 +203,7 @@ class Dataset:
             text (str): A cleaned text.
         """
         
+        text = str(text)
         text = text.lower().strip()
         text = re.sub(r"([?.!,¿])", r" \1 ", text)
         text = re.sub(r'[" "]+', " ", text)
@@ -268,7 +269,9 @@ class Dataset:
         df['input_ids'] = 0
         df['attention_mask'] = 0
         df['cell_features'] = 0
-        df = df.apply(self.preprocess_content, axis=1)
+
+        tqdm.pandas(desc="Preprocessing dataset")
+        df = df.progress_apply(self.preprocess_content, axis=1)
 
         df = df.drop(['source', 'rank', 'ancestor_id'], axis=1)
 
@@ -414,25 +417,6 @@ class Dataset:
         )
 
         return input_ids, attention_mask, cell_features, cell_mask, target
-    
-    
-    def filter_by_num_cells(self, df, max_cells, min_cells=0):
-        """
-        Filter the notebooks by the number of cells containing.
-        Args:
-            df (pd): Notebook dataframe.
-            max_cells (int): The upper bound on the number of cells to keep.
-            min_cells (int): The lower bound on the number of cells to keep.
-        Returns:
-            filtered_df (pd): The dataframe after being filtered.
-        """
-
-        cell_count = df.groupby("id").count()
-        cell_count = cell_count["cell_id"]
-        temp = cell_count[(cell_count >= min_cells) & (cell_count <= max_cells)]
-
-        filtered_df = df[df['id'].isin(temp.keys())]
-        return filtered_df
 
 
     def build_dataset(self, df=None, exceed_cells_action="filter"):
@@ -481,7 +465,9 @@ class Dataset:
             target
         ))
         dataset = dataset.map(map_func)
-        batched_set = dataset.shuffle(self.buffer_size).batch(self.batch_size)
+        dataset = dataset.batch(self.batch_size)
 
-        return df[["id", "cell_id"]], batched_set
+        del input_ids, attention_mask, cell_features, cell_mask, target
+
+        return df[["id", "cell_id"]], dataset
         
