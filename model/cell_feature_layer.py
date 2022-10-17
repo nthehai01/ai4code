@@ -13,7 +13,8 @@ class CellFeatureLayer(Layer):
         self.d_model = d_model
         self.ff = tf.keras.Sequential([
             Dense(64, activation='relu'),
-            Dense(d_model, activation='relu')
+            Dense(256, activation='relu'),
+            Dense(d_model)
         ])
     
 
